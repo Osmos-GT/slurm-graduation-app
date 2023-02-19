@@ -45,7 +45,7 @@ build-appserver:
     - cd yelb-appserver
     - docker build -t $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID .
     - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
-    after_script:
+  after_script:
     - docker images --filter=reference=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver -q | uniq | tail -n +2 | xargs -r docker rmi -f
 
 build-ui:
