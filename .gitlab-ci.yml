@@ -1,7 +1,7 @@
 stages:
   # - lint
   - build
-  # - test-appserver
+  - test
   # - test-ui
   # - push
   # - cleanup
@@ -60,17 +60,27 @@ build-ui:
   after_script:
     - docker images --filter=reference=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui -q | uniq | tail -n +2 | xargs -r docker rmi -f
 
-# test-appserver:
-#   stage: test-appserver
-#   needs: ['build-appserver']
-#   image:
-#     name: docker/compose:1.23.2
-#   script:
-#     - docker network create yelb
-#     - docker run -d -p 4567:4567 --name yelb-appserver --network yelb
-#       $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
-#     - sleep 8 # Sometimes appserver takes some time to start listening on port
-#     - docker run --network yelb --name yelb-curl-appsrv curlimages/curl:7.87.0 yelb-appserver:4567 --retry 5 --retry-connrefused
+test:
+  stage: test
+  # needs: ['build-appserver']
+  image:
+    name: docker/compose:1.23.2
+  script:
+    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
+    - docker network create yelb
+    - docker run -d -p 4567:4567 --name yelb-appserver --network yelb
+      $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+    - sleep 5
+    - docker run --network yelb --name yelb-curl-appsrv curlimages/curl:7.87.0 yelb-appserver:4567 --retry 5 --retry-connrefused
+    - docker run -d -p 80:80 --name yelb-ui --network yelb
+      $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+    - docker run --name yelb-curl-ui --network yelb curlimages/curl:7.87.0 yelb-ui:80 | grep '<title>Yelb</title>'
+  after_script:
+    - docker images --filter=reference=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver -q | uniq | tail -n +2 | xargs -r docker rmi -f
+    - docker images --filter=reference=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui -q | uniq | tail -n +2 | xargs -r docker rmi -f
+    - docker ps -a --filter=name=yelb -q | xargs -r docker rm -f
+    - docker network ls --filter name=yelb -q | xargs -r docker network rm
+    
 
 # test-ui:
 #   stage: test-ui
