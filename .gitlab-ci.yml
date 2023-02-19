@@ -79,7 +79,7 @@ test:
     - docker images --filter=reference=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui -q | uniq | tail -n +2 | xargs -r docker rmi -f
     - docker ps -a --filter=name=yelb -q | xargs -r docker rm -f
     - docker network ls --filter name=yelb -q | xargs -r docker network rm
-    
+
 
 # No need to add deploy token in gitlab gui. We are going to automate this.
 # # Token is saved in gitlab so we don't need to obtain it every time we run the pipeline.
