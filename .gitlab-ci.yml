@@ -108,7 +108,7 @@ deploy:
     - cloud-k8s
   needs:
     - job: lint-helm
-    - job: push
+    - job: test
     - job: obtain-deploy-token
       optional: true # deploy depends on obtain-deploy-token only if the latter exists.
   image: alpine/k8s:1.23.16
