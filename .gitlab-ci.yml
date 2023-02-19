@@ -1,0 +1,171 @@
+stages:
+  # - lint
+  - build
+  # - test-appserver
+  # - test-ui
+  # - push
+  # - cleanup
+  # - obtain-deploy-token
+  # - deploy
+
+#######
+
+default:
+  tags:
+    - cloud-k8s
+
+variables:
+  GET_SOURCES_ATTEMPTS: 3
+
+# Yamllint does not work well with helm templates therefore we exclude dir with them. They are checked by helm lint anyway.
+# https://github.com/sbaudoin/sonar-yaml/issues/46
+# Default line length of 80 is too short for gitlab-ci file.
+# lint-yaml:
+#   stage: lint
+#   image:
+#     name: cytopia/yamllint
+#     entrypoint: ["/bin/ash", "-c"]
+#   script:
+#     - 'yamllint -f colored . -d "{extends: relaxed, ignore: helm/templates, rules: {line-length: {max: 160}}}"'
+
+# lint-helm:
+#   stage: lint
+#   image:
+#     name: alpine/helm:3.10.2
+#   script:
+#     - cd helm
+#     - helm lint
+
+build-appserver:
+  stage: build
+  image:
+    name: docker/compose:1.23.2
+  script:
+    - cd yelb-appserver
+    - docker pull $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.latest || true
+    - docker build --cache-from $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.latest
+      -t $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+      -t $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.latest .
+    - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+    - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.latest
+
+build-ui:
+  stage: build
+  image:
+    name: docker/compose:1.23.2
+  script:
+    - cd yelb-ui
+    - docker pull $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.latest || true
+    - docker build --cache-from $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.latest
+      -t $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+      -t $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.latest .
+    - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+    - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.latest
+    - docker history $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+
+# test-appserver:
+#   stage: test-appserver
+#   needs: ['build-appserver']
+#   image:
+#     name: docker/compose:1.23.2
+#   script:
+#     - docker network create yelb
+#     - docker run -d -p 4567:4567 --name yelb-appserver --network yelb
+#       $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+#     - sleep 8 # Sometimes appserver takes some time to start listening on port
+#     - docker run --network yelb --name yelb-curl-appsrv curlimages/curl:7.87.0 yelb-appserver:4567 --retry 5 --retry-connrefused
+
+# test-ui:
+#   stage: test-ui
+#   needs:
+#     - build-ui
+#     - test-appserver
+#   image:
+#     name: docker/compose:1.23.2
+#   script:
+#     - docker run -d -p 80:80 --name yelb-ui --network yelb
+#       $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+#     - sleep 3 # Give ui some time to start up
+#     - docker run --name yelb-curl-ui --network yelb curlimages/curl:7.87.0 yelb-ui:80 | grep '<title>Yelb</title>'
+
+# push:
+#   stage: push
+#   needs:
+#     - test-appserver
+#     - test-ui
+#   image:
+#     name: docker/compose:1.23.2
+#   variables:
+#     GIT_STRATEGY: none
+#   before_script:
+#     - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
+#   script:
+#     - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+#     - docker push $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+#   only:
+#     - main
+
+# # Delete all images built except the last one of each microservice. Also we are going to remove any leftover containers and network used for testing.
+# # This will prevent clogging up the runner but allow using cache to speed up build process.
+# cleanup:
+#   stage: cleanup
+#   when: always
+#   image:
+#     name: docker/compose:1.23.2
+#   script:
+#     - docker images --filter=reference=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver -q | uniq | tail -n +2 | xargs -r docker rmi -f
+#     - docker images --filter=reference=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui -q | uniq | tail -n +2 | xargs -r docker rmi -f
+#     - docker ps -a --filter=name=yelb -q | xargs -r docker rm -f
+#     - docker network ls --filter name=yelb -q | xargs -r docker network rm
+
+# # No need to add deploy token in gitlab gui. We are going to automate this.
+# # Token is saved in gitlab so we don't need to obtain it every time we run the pipeline.
+# obtain-deploy-token:
+#   stage: obtain-deploy-token
+#   rules:
+#     - if: $DEPLOY_TOKEN_USER == null # skip this job if token is already obtained.
+#       when: on_success
+#   image:
+#     name: alpine:3.17.2
+#   script:
+#     - apk add curl jq
+#     - TOKEN=$(curl -sS --request POST --header "PRIVATE-TOKEN:$GITLAB_PRIVATE_TOKEN" --header "Content-Type:application/json"
+#       --data '{"name":"My deploy token", "scopes":["read_registry"]}'
+#       "https://yelbgit.gitlab.yandexcloud.net/api/v4/groups/yelb/deploy_tokens/")
+#     - DEPLOY_USER=$(echo $TOKEN | jq -r '.username')
+#     - DEPLOY_PASS=$(echo $TOKEN | jq -r '.token')
+#     - curl -sS --request POST --header "PRIVATE-TOKEN:$GITLAB_PRIVATE_TOKEN" "https://yelbgit.gitlab.yandexcloud.net/api/v4/groups/yelb/variables"
+#       --form "key=DEPLOY_TOKEN_USER" --form "value=$DEPLOY_USER"
+#     - curl -sS --request POST --header "PRIVATE-TOKEN:$GITLAB_PRIVATE_TOKEN" "https://yelbgit.gitlab.yandexcloud.net/api/v4/groups/yelb/variables"
+#       --form "key=DEPLOY_TOKEN_PASS" --form "value=$DEPLOY_PASS"
+
+# deploy:
+#   stage: deploy
+#   tags:
+#     - cloud-k8s
+#   needs:
+#     - job: lint-helm
+#     - job: push
+#     - job: obtain-deploy-token
+#       optional: true # deploy depends on obtain-deploy-token only if the latter exists.
+#   image: alpine/k8s:1.23.16
+#   script:
+#     - kubectl get namespace | grep "^yelb " || kubectl create namespace yelb # ns and secret will be created only if they do not exist
+#     - kubectl create secret docker-registry yelb-gitlab-registry --docker-server yelbgit.gitlab.yandexcloud.net:5050
+#       --docker-email "student@slurm.io" --docker-username "$DEPLOY_TOKEN_USER" --docker-password "$DEPLOY_TOKEN_PASS"
+#       --namespace yelb --dry-run=client -o yaml | kubectl apply -f -
+#     - helm upgrade --install yelb helm/
+#         --set appserver.image=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver
+#         --set ui.image=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui
+#         --set tag=$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
+#         --set db.server=$YELB_DB_ADDR
+#         --set db.port=$YELB_DB_PORT
+#         --set db.user=$YELB_DB_USER
+#         --set db.password=$YELB_DB_PASS
+#         --namespace yelb
+#         --timeout 300s
+#         --debug
+#         --wait
+#         --atomic
+#   only:
+#     - main

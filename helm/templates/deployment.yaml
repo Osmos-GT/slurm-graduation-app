@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "yelb.fullname" . }}-appserver
+  labels:
+    {{- include "yelb.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: {{ template "yelb.fullname" . }}
+      component: appserver
+  template:
+    metadata:
+      labels:
+        app: {{ template "yelb.fullname" . }}
+        component: appserver
+    spec:
+      containers:
+      - name: {{ template "yelb.fullname" . }}-appserver
+        image:  {{ .Values.appserver.image }}:{{ .Values.tag }}
+        ports:
+        - containerPort: {{ .Values.appserver.port }}
+        env:
+        - name: "RACK_ENV"
+          value: "custom"
+        - name: "APP_SERVER_HOSTNAME"
+          value: {{ template "yelb.fullname" . }}-appserver
+        - name: "REDIS_SERVER_ENDPOINT"
+          value: {{ .Values.redisServerEndpoint }}
+        - name: "YELB_DB_SERVER_ENDPOINT"
+          value: {{ .Values.db.server }}
+        - name: "YELB_DB_PORT"
+          value: {{ .Values.db.port | squote }}
+        - name: "YELB_DB_NAME"
+          value: {{ .Values.db.name | squote }}
+        - name: "YELB_DB_USER"
+          value: {{ .Values.db.user | squote }}
+        - name: "YELB_DB_PASS"
+          value: {{ .Values.db.password | squote }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "yelb.fullname" . }}-ui
+  labels:
+    {{- include "yelb.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: {{ template "yelb.fullname" . }}
+      component: ui
+  template:
+    metadata:
+      labels:
+        app: {{ template "yelb.fullname" . }}
+        component: ui
+    spec:
+      containers:
+      - name: yelb-ui
+        image:  {{ .Values.ui.image }}:{{ .Values.tag }}
+        ports:
+        - containerPort: {{ .Values.ui.containerPort }}
+        env:
+        - name: "APP_SERVER_HOSTNAME"
+          value: {{ template "yelb.fullname" . }}-appserver
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 6 }}
+      {{- end }}

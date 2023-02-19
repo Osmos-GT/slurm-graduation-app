@@ -1,0 +1,61 @@
+# Default values for yelb.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicas: 2
+
+# Tag for appserver and ui images.
+tag: $CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID # passed by Helm. Do not edit it here.
+
+# Redis server address.
+# Redis should be configured not to use authentication as yelb-appserver does not support it.
+redisServerEndpoint: redis-master.redis.svc.cluster.local
+
+appserver:
+  port: 4567
+  image: $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver # passed by Helm. Do not edit it here.
+
+ui:
+  port: 80
+  containerPort: 80
+  serviceType: ClusterIP
+  image: $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui # passed by Helm. Do not edit it here.
+
+# DB connectivity variables are also passed to helm by gitlab runner. Do not edit them here.
+# Values here are shown just for convenience.
+db:
+  server: $YELB_DB_ADDR
+  port: $YELB_DB_PORT
+  name: yelbdatabase
+  user: $YELB_DB_USER
+  password: $YELB_DB_PASS
+
+imagePullSecrets:
+  - name: yelb-gitlab-registry
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt"
+  path: /
+  hosts:
+    - s046013.fun
+  tls:
+    - secretName: letsencrypt
+      hosts:
+        - s046013.fun
+
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

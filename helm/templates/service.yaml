@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "yelb.fullname" . }}-appserver
+  labels:
+    {{- include "yelb.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ .Values.appserver.port }}
+  selector:
+    app: {{ template "yelb.fullname" . }}
+    component: appserver
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "yelb.fullname" . }}-ui
+  labels:
+    {{- include "yelb.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ template "yelb.fullname" . }}
+    component: ui
+  type: {{ .Values.ui.serviceType }}
+  ports:
+    - port: {{ .Values.ui.port }}
+      targetPort: {{ .Values.ui.containerPort }}
+      protocol: TCP
