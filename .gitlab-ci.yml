@@ -11,8 +11,8 @@ default:
   tags:
     - cloud-k8s
 
-variables:
-  GET_SOURCES_ATTEMPTS: 3
+# variables:
+#   GET_SOURCES_ATTEMPTS: 3
 
 # Yamllint does not work well with helm templates therefore we exclude dir with them. They are checked by helm lint anyway.
 # https://github.com/sbaudoin/sonar-yaml/issues/46
