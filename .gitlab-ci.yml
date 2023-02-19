@@ -74,7 +74,6 @@ test:
     - docker run --network yelb --name yelb-curl-appsrv curlimages/curl:7.87.0 yelb-appserver:4567 --retry 5 --retry-connrefused
     - docker run -d -p 80:80 --name yelb-ui --network yelb
       $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
-    - docker ps
     - docker run --name yelb-curl-ui --network yelb curlimages/curl:7.87.0 yelb-ui:80 --retry 5 --retry-connrefused | grep '<title>Yelb</title>'
   after_script:
     - docker images --filter=reference=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver -q | uniq | tail -n +2 | xargs -r docker rmi -f
