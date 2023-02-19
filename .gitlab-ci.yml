@@ -5,7 +5,7 @@ stages:
   - obtain-deploy-token
   - deploy
 
-#######@###
+#######@##
 
 default:
   tags:
