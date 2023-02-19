@@ -12,7 +12,7 @@ default:
     - cloud-k8s
 
 variables:
-  GET_SOURCES_ATTEMPTS: 3
+  GET_SOURCES_ATTEMPTS: 3 # in case network error occurs
 
 # Yamllint does not work well with helm templates therefore we exclude dir with them. They are checked by helm lint anyway.
 # https://github.com/sbaudoin/sonar-yaml/issues/46
@@ -35,6 +35,8 @@ lint-helm:
 
 build-appserver:
   stage: build
+  needs:
+    - lint-yaml ## It should be ruby linting actually
   image:
     name: docker/compose:1.23.2
   script:
@@ -47,6 +49,8 @@ build-appserver:
 
 build-ui:
   stage: build
+  needs:
+    - lint-yaml ## It should be ruby linting actually
   image:
     name: docker/compose:1.23.2
   script:
@@ -70,11 +74,11 @@ test:
     - docker run -d -p 4567:4567 --name yelb-appserver --network yelb
       $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
     - sleep 5
-    - docker run --network yelb --name yelb-curl-appsrv curlimages/curl:7.87.0 yelb-appserver:4567 --retry 5 --retry-connrefused
+    - docker run --network yelb --name yelb-curl-appsrv curlimages/curl:7.87.0 yelb-appserver:4567 --retry 5 --retry-connrefused # appserver separate check
     - docker run -d -p 80:80 --name yelb-ui --network yelb
       $CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui:$CI_COMMIT_REF_SLUG.$CI_PIPELINE_ID
-    - docker run --name yelb-curl-ui --network yelb curlimages/curl:7.87.0 yelb-ui:80 --retry 5 --retry-connrefused | grep '<title>Yelb</title>'
-  after_script:
+    - docker run --name yelb-curl-ui --network yelb curlimages/curl:7.87.0 yelb-ui:80 --retry 5 --retry-connrefused | grep '<title>Yelb</title>' # ui check
+  after_script: # cleanup
     - docker images --filter=reference=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/appserver -q | uniq | tail -n +2 | xargs -r docker rmi -f
     - docker images --filter=reference=$CI_REGISTRY/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME/ui -q | uniq | tail -n +2 | xargs -r docker rmi -f
     - docker ps -a --filter=name=yelb -q | xargs -r docker rm -f
