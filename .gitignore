@@ -1,4 +1,4 @@
 .directory
 .git/
 deployments/
-deployments/localdevelopment/clarity-seed
+#deployments/localdevelopment/clarity-seed
